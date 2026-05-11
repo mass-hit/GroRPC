@@ -1,12 +1,14 @@
 package main
 
 import (
-	service "GroRPC/service"
+	"GroRPC/registry"
+	"GroRPC/service"
 	"GroRPC/xclient"
 	"context"
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -28,7 +30,7 @@ func (g *Server) Sleep(argv int, reply *int) error {
 	return nil
 }
 
-func startServer(addr string) {
+func startServer(addr, registryAddr string) {
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatal(err)
@@ -36,18 +38,32 @@ func startServer(addr string) {
 	srv := service.NewServer()
 	serverNum++
 	srv.Register(&Server{num: serverNum})
+	registry.HeartBeat(registryAddr, addr, 0)
 	go srv.Accept(l)
 }
 
 func main() {
-	addr1, addr2, addr3 := ":8080", ":8081", ":8082"
-	startServer(addr1)
-	startServer(addr2)
-	startServer(addr3)
-	d := xclient.NewMultiServerDiscovery([]string{addr1, addr2, addr3})
-	_ = d.SetWeight(addr1, 3)
-	_ = d.SetWeight(addr2, 2)
-	client := xclient.NewXClient(d, service.DefaultOption)
+	addr1, addr2, addr3, registryPort := ":8080", ":8081", ":8082", ":8003"
+	r := registry.NewRegistry(0)
+	l, err := net.Listen("tcp", registryPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+	registryPath := "/grorpc/registry"
+	r.HandleHttp(registryPath)
+	go func() {
+		err = http.Serve(l, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+	time.Sleep(time.Second)
+	registryAddr := "http://localhost" + registryPort + registryPath
+	discovery := xclient.NewRegistryDiscovery(registryAddr, 0)
+	startServer(addr1, registryAddr)
+	startServer(addr2, registryAddr)
+	startServer(addr3, registryAddr)
+	client := xclient.NewXClient(discovery, service.DefaultOption)
 	defer client.Close()
 	time.Sleep(time.Second)
 	var wg sync.WaitGroup
@@ -77,6 +93,7 @@ func main() {
 		}(i)
 	}
 	wg.Wait()
+	time.Sleep(30 * time.Second)
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(i int) {

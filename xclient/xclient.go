@@ -10,13 +10,13 @@ import (
 
 // XClient is an extended RPC client
 type XClient struct {
-	d       *MultiServerDiscovery
+	d       Discovery
 	opt     *service.Option
 	mu      sync.Mutex
 	clients map[string]*service.Client // Cached RPC clients indexed by server address
 }
 
-func NewXClient(d *MultiServerDiscovery, opt *service.Option) *XClient {
+func NewXClient(d Discovery, opt *service.Option) *XClient {
 	return &XClient{d: d, opt: opt, clients: make(map[string]*service.Client)}
 }
 

@@ -6,6 +6,12 @@ import (
 	"sync/atomic"
 )
 
+type Discovery interface {
+	Update([]string) error
+	Get() (string, error)
+	GetAll() ([]string, error)
+}
+
 // MultiServerDiscovery manages multiple RPC server addresses
 type MultiServerDiscovery struct {
 	mu        sync.RWMutex // protects servers slice
